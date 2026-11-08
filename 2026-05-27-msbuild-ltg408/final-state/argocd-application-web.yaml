@@ -1,0 +1,38 @@
+# Final state of step 3 (Make it repeatable): the Argo CD Application that the AKS extension for VS Code generates with
+# "AKS: Create Argo CD Application" (App name web, Manifest repo URL https://github.com/pauldotyu/contoso-air.git,
+# Manifest path src/web/k8s, Target namespace team-blue). One change: targetRevision is pinned to the commit of the
+# Microsoft Build LTG408 demo (branch msbuild26/ltg408), whose src/web/k8s manifests were generated with the extension's
+# Develop & Deploy (Containerization Assist), so this example can't change underneath you. To watch Argo CD sync your
+# own commits, point repoURL at your repository and set targetRevision to HEAD.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: web
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: web
+    app.kubernetes.io/managed-by: argocd
+  annotations:
+    aks-extension/docs: "https://argo-cd.readthedocs.io/en/stable/"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/pauldotyu/contoso-air.git
+    targetRevision: 74e4c470448a342c5a748b655d47bd74abd7554f
+    path: src/web/k8s
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: team-blue
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - Validate=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

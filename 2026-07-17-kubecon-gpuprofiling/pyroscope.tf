@@ -67,11 +67,13 @@ resource "helm_release" "pyroscope_operator" {
         # (per Grafana instance/region), NOT in our subscription. The CCM matches
         # azure-pls-auto-approval against the PE's subscription, so this must be
         # that AMG platform subscription for the pending connection to auto-approve.
-        # Stable for this Grafana instance but undocumented; update if you rebuild
-        # Grafana in a different region. See the README ("Look up the auto-approval
+        # Stable for this Grafana instance but undocumented; set the
+        # pyroscope_pls_auto_approval_subscription_ids variable if you deploy Grafana
+        # in a different region. See the README ("Look up the auto-approval
         # subscription ID") for the full az lookup from the AKS name + resource group.
+        # Commas are escaped because Helm treats unescaped commas as value separators.
         name  = "pyroscope.service.annotations.service\\.beta\\.kubernetes\\.io/azure-pls-auto-approval"
-        value = "e08067a5-cca7-453a-87df-eb2ddd9d60d6"
+        value = replace(var.pyroscope_pls_auto_approval_subscription_ids, ",", "\\,")
         type  = "string"
       },
       {
@@ -81,8 +83,33 @@ resource "helm_release" "pyroscope_operator" {
       {
         name  = "minio.enabled"
         value = "false"
+      },
+      {
+        # The filesystem bucket defaults to ./data-shared, which resolves to /data-shared. The non-root Pyroscope user
+        # can't create it, so block uploads fail, and profiles older than querier.query_store_after (4h) can't be
+        # queried. Keep the bucket on the data volume.
+        name  = "pyroscope.structuredConfig.storage.filesystem.dir"
+        value = "/data/shared"
       }
-    ]
+    ],
+    var.pyroscope_persistent_volume_size == null ? [] : [
+      {
+        name  = "pyroscope.persistence.enabled"
+        value = "true"
+      },
+      {
+        name  = "pyroscope.persistence.size"
+        value = var.pyroscope_persistent_volume_size
+        type  = "string"
+      }
+    ],
+    var.pyroscope_do_not_disrupt ? [
+      {
+        name  = "pyroscope.podAnnotations.karpenter\\.sh/do-not-disrupt"
+        value = "true"
+        type  = "string"
+      }
+    ] : []
   )
 
   depends_on = [

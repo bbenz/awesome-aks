@@ -18,6 +18,6 @@ locals {
 }
 
 resource "azurerm_resource_group" "example" {
-  name     = "rg-${local.random_name}"
+  name     = coalesce(var.resource_group_name, "rg-${local.random_name}")
   location = var.location
 }

@@ -239,7 +239,7 @@ resource "azurerm_monitor_data_collection_rule" "msci" {
       extension_json = <<JSON
       {
         "dataCollectionSettings": {
-          "interval": "1m",
+          "interval": "${var.container_insights_interval}",
           "namespaceFilteringMode": "Off",
           "enableContainerLogV2": true
         }

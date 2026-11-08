@@ -1,0 +1,143 @@
+# Final state of steps 1 and 2 (Deploy and Manage with AKS desktop): the manifests that the AKS desktop
+# Deploy Application wizard generates in the team-blue project for these settings:
+#   Basics: Application name contoso-air, Container image ghcr.io/pauldotyu/contoso-air:1.2.0, Replicas 2
+#   Networking: Container port (target port) 3000, Use custom service port on, Service port 80, internal only (ClusterIP)
+#   Healthchecks, Resource Limits, Advanced: wizard defaults
+#   Environment Variables: the five chat settings below (no API key)
+#   HPA: on, Min replicas 2, Max replicas 4, Target CPU utilization 70
+#   Workload Identity: on, Use existing identity (the managed identity from Terraform); service account contoso-air-sa
+# Fill in the two placeholders from Terraform outputs before you apply it (see the README):
+#   AZURE_OPENAI_ENDPOINT        terraform output -raw mf_api_base_url
+#   WORKLOAD_IDENTITY_CLIENT_ID  terraform output -raw mi_client_id
+# ServiceAccount
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: contoso-air-sa
+  namespace: team-blue
+  annotations:
+    azure.workload.identity/client-id: "${WORKLOAD_IDENTITY_CLIENT_ID}"
+---
+# Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: contoso-air
+  namespace: team-blue
+  annotations:
+    aks-project/deployed-by: manual
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: contoso-air
+  template:
+    metadata:
+      labels:
+        app: contoso-air
+        azure.workload.identity/use: "true"
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app: contoso-air
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: contoso-air
+      serviceAccountName: contoso-air-sa
+      containers:
+        - name: contoso-air
+          image: ghcr.io/pauldotyu/contoso-air:1.2.0
+          ports:
+            - containerPort: 3000
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 1
+            failureThreshold: 3
+            successThreshold: 1
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 1
+            failureThreshold: 3
+            successThreshold: 1
+          startupProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 0
+            periodSeconds: 10
+            timeoutSeconds: 1
+            failureThreshold: 30
+            successThreshold: 1
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          env:
+            - name: CHAT_PROVIDER
+              value: "azure"
+            - name: AZURE_OPENAI_ENDPOINT
+              value: "${AZURE_OPENAI_ENDPOINT}"
+            - name: AZURE_OPENAI_DEPLOYMENT
+              value: "gpt-5.4-mini"
+            - name: AZURE_OPENAI_API_VERSION
+              value: "2024-10-21"
+            - name: AZURE_OPENAI_CLIENTID
+              value: "${WORKLOAD_IDENTITY_CLIENT_ID}"
+          securityContext:
+            allowPrivilegeEscalation: false
+---
+# Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: contoso-air
+  namespace: team-blue
+spec:
+  type: ClusterIP
+  selector:
+    app: contoso-air
+  ports:
+    - port: 80
+      targetPort: 3000
+---
+# HPA
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: contoso-air
+  namespace: team-blue
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: contoso-air
+  minReplicas: 2
+  maxReplicas: 4
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70

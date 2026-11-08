@@ -23,6 +23,7 @@ spec:
     metadata:
       labels:
         kubernetes.azure.com/ebpf-dataplane: cilium
+        nvidia.com/gpu.product: ${NVIDIA_GPU_PRODUCT}
     spec:
       expireAfter: Never
       nodeClassRef:

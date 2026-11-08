@@ -68,9 +68,12 @@ resource "azuread_application_federated_identity_credential" "example" {
 
 resource "azuread_service_principal" "example" {
   client_id = azuread_application.example.client_id
+  # Lets a non-admin deployer assign the group below and delete the service principal on destroy.
+  owners = [data.azuread_client_config.current.object_id]
 }
 
 resource "azuread_service_principal_delegated_permission_grant" "example" {
+  count                                = var.pre_consent_graph_permissions ? 1 : 0
   service_principal_object_id          = azuread_service_principal.example.object_id
   resource_service_principal_object_id = data.azuread_service_principal.msgraph.object_id
   claim_values                         = ["openid", "profile", "email", "User.Read"]

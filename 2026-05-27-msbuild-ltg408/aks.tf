@@ -17,7 +17,7 @@ resource "azapi_resource" "aks" {
         {
           name  = "systempool"
           mode  = "System"
-          count = 3
+          count = var.system_node_pool_count
         }
       ]
       addonProfiles = {

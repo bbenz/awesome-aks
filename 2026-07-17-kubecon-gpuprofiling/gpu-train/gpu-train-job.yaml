@@ -1,0 +1,65 @@
+# A five-phase GPU training job (TinyGPT, 10 minutes on one GPU) to profile with the Advanced GPU Observability
+# dashboard without Anyscale. See "Walkthrough: from terraform apply to a profiled end state" in the README.
+#
+# Before you apply it:
+#   1. Import the PyTorch image into the container registry Terraform created (the kubelet identity can pull from it):
+#        ACR_NAME=$(az acr list -g "$RG_NAME" --query "[0].name" -o tsv)
+#        az acr import -n "$ACR_NAME" --source docker.io/pytorch/pytorch:2.5.1-cuda12.4-cudnn9-runtime
+#   2. Create the namespace and the ConfigMap with the training script:
+#        kubectl create namespace gpu-demo
+#        kubectl create configmap gpu-train-script -n gpu-demo --from-file=gpu-train/gpu-train.py
+#   3. Apply this file with your registry name filled in:
+#        sed "s/<acr-name>/$ACR_NAME/" gpu-train/gpu-train-job.yaml | kubectl apply -f -
+#
+# The pod requests one nvidia.com/gpu and selects the nvidia node pool, so Node Autoprovisioning creates a GPU node for
+# it (about 5.5 minutes for a new node with the AKS-managed driver, plus about 1.5 minutes to pull the 3.3 GB image).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: gpu-train
+  namespace: gpu-demo
+  labels:
+    app: gpu-train
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 7200
+  template:
+    metadata:
+      labels:
+        app: gpu-train
+    spec:
+      restartPolicy: Never
+      nodeSelector:
+        karpenter.sh/nodepool: nvidia
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: NoSchedule
+      containers:
+        - name: train
+          image: <acr-name>.azurecr.io/pytorch/pytorch:2.5.1-cuda12.4-cudnn9-runtime
+          command: ["python", "/workload/gpu-train.py"]
+          env:
+            - name: DURATION_SECONDS
+              value: "600"
+            - name: PHASE_SECONDS
+              value: "45"
+          resources:
+            requests:
+              cpu: "2"
+              memory: 8Gi
+              nvidia.com/gpu: "1"
+            limits:
+              cpu: "3"
+              memory: 16Gi
+              nvidia.com/gpu: "1"
+          securityContext:
+            allowPrivilegeEscalation: false
+          volumeMounts:
+            - name: workload
+              mountPath: /workload
+              readOnly: true
+      volumes:
+        - name: workload
+          configMap:
+            name: gpu-train-script

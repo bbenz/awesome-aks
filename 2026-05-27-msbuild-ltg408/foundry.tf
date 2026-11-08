@@ -5,7 +5,7 @@ resource "azurerm_cognitive_account" "example" {
   custom_subdomain_name = "mf-${local.random_name}"
   kind                  = "AIServices"
   sku_name              = "S0"
-  local_auth_enabled    = true
+  local_auth_enabled    = var.foundry_local_auth_enabled
 }
 
 resource "azurerm_cognitive_deployment" "example" {

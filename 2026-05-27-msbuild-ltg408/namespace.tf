@@ -21,10 +21,10 @@ resource "azapi_resource" "managed_namespace" {
         ingress = "AllowAll"
       }
       defaultResourceQuota = {
-        cpuLimit      = "2000m"
-        cpuRequest    = "2000m"
-        memoryLimit   = "4096Mi"
-        memoryRequest = "4096Mi"
+        cpuLimit      = var.namespace_resource_quota.cpu_limit
+        cpuRequest    = var.namespace_resource_quota.cpu_request
+        memoryLimit   = var.namespace_resource_quota.memory_limit
+        memoryRequest = var.namespace_resource_quota.memory_request
       }
       deletePolicy = "Delete"
       labels = {

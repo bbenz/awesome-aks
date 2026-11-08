@@ -11,6 +11,7 @@ resource "azurerm_storage_account" "example" {
   is_hns_enabled                  = true
   default_to_oauth_authentication = true
   shared_access_key_enabled       = true
+  allow_nested_items_to_be_public = var.storage_allow_nested_items_to_be_public
 
   blob_properties {
     cors_rule {

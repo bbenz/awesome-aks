@@ -122,6 +122,8 @@ resource "local_file" "nvidia_nodepool" {
   content = templatefile("nvidia-nodepool.tmpl",
     {
       NVIDIA_SKU_NAME = var.nvidia_sku_name
+      # Matches the node selector the Anyscale operator puts on GPU pods.
+      NVIDIA_GPU_PRODUCT = "NVIDIA-${var.anyscale_gpu_instance_type.accelerator}"
     }
   )
 }
